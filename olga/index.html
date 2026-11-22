@@ -98,35 +98,72 @@
         const canvas = document.getElementById('fireworks');
         const ctx = canvas.getContext('2d');
         let W, H, particles = [], fireworksActive = false;
+        
         function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
         resize();
         window.addEventListener('resize', resize);
 
         class Particle {
-            constructor(x, y, color, isRocket = false) {
-                this.x = x; this.y = y; this.isRocket = isRocket; this.color = color;
+            constructor(x, y, color, isRocket = false, isFlash = false) {
+                this.x = x; this.y = y; this.color = color; this.isRocket = isRocket; this.isFlash = isFlash;
+                
                 if (isRocket) {
-                    this.targetY = Math.random() * H * 0.4 + 50;
-                    this.vy = -(Math.random() * 4 + 6); this.vx = (Math.random() - 0.5) * 2; this.trail = [];
+                    this.targetY = Math.random() * H * 0.3 + 50;
+                    this.vy = -(Math.random() * 5 + 8); // Быстрее взлетает
+                    this.vx = (Math.random() - 0.5) * 1.5;
+                    this.trail = [];
+                } else if (isFlash) {
+                    // Резкая вспышка в центре
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 2 + 1;
+                    this.vx = Math.cos(angle) * speed;
+                    this.vy = Math.sin(angle) * speed;
+                    this.alpha = 1;
+                    this.decay = 0.08; // Очень быстро гаснет
+                    this.radius = Math.random() * 4 + 3;
+                    this.gravity = 0;
                 } else {
-                    const angle = Math.random() * Math.PI * 2, speed = Math.random() * 5 + 2;
-                    this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
-                    this.alpha = 1; this.decay = Math.random() * 0.015 + 0.008; this.gravity = 0.06;
+                    // Искры петарды
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 8 + 3; // Высокая скорость разлёта
+                    this.vx = Math.cos(angle) * speed;
+                    this.vy = Math.sin(angle) * speed;
+                    this.alpha = 1;
+                    this.decay = Math.random() * 0.02 + 0.015;
+                    this.radius = Math.random() * 1.5 + 0.5; // Мелкие частицы
+                    this.gravity = 0.15; // Сильная гравитация (искра падает вниз)
+                    this.flicker = Math.random() > 0.5; // Эффект мерцания (треска)
                 }
             }
+
             update() {
                 if (this.isRocket) {
                     this.trail.push({ x: this.x, y: this.y });
-                    if (this.trail.length > 6) this.trail.shift();
-                    this.x += this.vx; this.y += this.vy; this.vy += 0.08;
-                    if (this.vy >= 0 || this.y <= this.targetY) { this.explode(); return false; }
+                    if (this.trail.length > 5) this.trail.shift();
+                    this.x += this.vx; this.y += this.vy; this.vy += 0.1;
+                    if (this.vy >= 0 || this.y <= this.targetY) { 
+                        this.explode(); 
+                        return false; 
+                    }
                 } else {
-                    this.vx *= 0.98; this.vy *= 0.98; this.vy += this.gravity;
-                    this.x += this.vx; this.y += this.vy; this.alpha -= this.decay;
+                    this.vx *= 0.96; // Сопротивление воздуха
+                    this.vy *= 0.96;
+                    this.vy += this.gravity;
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    
+                    // Эффект мерцания (треск петарды)
+                    if (this.flicker && Math.random() > 0.7) {
+                        this.alpha = Math.random() * 0.5 + 0.5;
+                    } else {
+                        this.alpha -= this.decay;
+                    }
+                    
                     if (this.alpha <= 0) return false;
                 }
                 return true;
             }
+
             draw() {
                 if (this.isRocket) {
                     for (let i = 0; i < this.trail.length; i++) {
@@ -135,37 +172,68 @@
                     }
                     ctx.fillStyle = '#fff'; ctx.fillRect(this.x, this.y, 3, 3);
                 } else {
-                    ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color;
-                    ctx.beginPath(); ctx.arc(this.x, this.y, 2.5, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+                    ctx.globalAlpha = this.alpha; 
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath(); 
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); 
+                    ctx.fill(); 
+                    ctx.globalAlpha = 1;
                 }
             }
+
             explode() {
-                const colors = ['#0078d7', '#ffd700', '#ffffff', '#00ccff', '#ffcc00', '#0058ee'];
-                const color = colors[Math.floor(Math.random() * colors.length)];
-                for (let i = 0; i < 70; i++) particles.push(new Particle(this.x, this.y, color, false));
+                // 1. Яркая центральная вспышка
+                for (let i = 0; i < 15; i++) {
+                    particles.push(new Particle(this.x, this.y, '#ffffff', false, true));
+                }
+                // 2. Россыпь искр (золото, серебро, белый)
+                const sparkColors = ['#ffffff', '#ffd700', '#e0e0e0', '#ffffaa'];
+                for (let i = 0; i < 80; i++) {
+                    const color = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+                    particles.push(new Particle(this.x, this.y, color, false, false));
+                }
             }
         }
 
         function animate() {
             if (!fireworksActive && particles.length === 0) return;
             requestAnimationFrame(animate);
-            ctx.fillStyle = 'rgba(10, 10, 10, 0.15)'; ctx.fillRect(0, 0, W, H);
-            particles = particles.filter(p => { const alive = p.update(); if (alive) p.draw(); return alive; });
+            // Более тёмный след для контраста ярких искр
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.2)'; 
+            ctx.fillRect(0, 0, W, H);
+            
+            particles = particles.filter(p => { 
+                const alive = p.update(); 
+                if (alive) p.draw(); 
+                return alive; 
+            });
         }
 
         function startFireworks() {
-            canvas.style.display = 'block'; fireworksActive = true; animate();
+            canvas.style.display = 'block'; 
+            fireworksActive = true; 
+            animate();
+            
             let count = 0;
             const interval = setInterval(() => {
-                if (count > 35) { clearInterval(interval); fireworksActive = false; return; }
-                particles.push(new Particle(Math.random() * W * 0.8 + W * 0.1, H, '#fff', true));
+                if (count > 25) { // Меньше залпов, но каждый мощный
+                    clearInterval(interval); 
+                    fireworksActive = false; 
+                    return; 
+                }
+                const x = Math.random() * W * 0.8 + W * 0.1;
+                particles.push(new Particle(x, H, '#ffffff', true, false));
                 count++;
-            }, 300);
+            }, 400); // Чуть реже, чтобы каждый взрыв был акцентирован
         }
 
         document.getElementById('yesBtn').addEventListener('click', () => {
             dialog.style.opacity = '0';
-            setTimeout(() => { dialog.style.display = 'none'; document.body.style.background = '#0a0a0a'; startFireworks(); }, 500);
+            setTimeout(() => { 
+                dialog.style.display = 'none'; 
+                document.body.style.background = '#050505'; // Почти чёрный фон для максимального контраста искр
+                startFireworks(); 
+            }, 500);
         });
         
         document.querySelector('.close-btn').addEventListener('click', () => alert('А вот и не угадал! Нажимай "Да" 😉'));
